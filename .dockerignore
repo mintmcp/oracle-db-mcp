@@ -1,0 +1,5 @@
+# Send only the toolkit sources to the build.
+*
+!upstream/src/oracle-db-mcp-java-toolkit/
+upstream/src/oracle-db-mcp-java-toolkit/target/
+**/.git

@@ -14,10 +14,10 @@ The toolkit itself is unmodified and runs with its default tool set. See the ups
 ```bash
 git submodule update --init --recursive
 
-docker buildx build --platform linux/amd64 -t <namespace>/oracle-db-mcp:local --load ./upstream
+docker buildx build --platform linux/amd64 -t <namespace>/oracle-db-mcp:local --load .
 ```
 
-The build context is the `upstream/` submodule; the Dockerfile picks `src/oracle-db-mcp-java-toolkit` out of it. The image runs over stdio, so test it by feeding MCP JSON-RPC on stdin:
+The build context is the repo root; `.dockerignore` sends only `upstream/src/oracle-db-mcp-java-toolkit` to the build. The image runs over stdio, so test it by feeding MCP JSON-RPC on stdin:
 
 ```bash
 docker run -i --rm --platform linux/amd64 \
@@ -32,7 +32,7 @@ Send `initialize`, then `tools/list`; 17 tools come back. Anything the entrypoin
 ## Publishing
 
 ```bash
-docker buildx build --platform linux/amd64 -t <namespace>/oracle-db-mcp:<tag> --load ./upstream
+docker buildx build --platform linux/amd64 -t <namespace>/oracle-db-mcp:<tag> --load .
 docker push <namespace>/oracle-db-mcp:<tag>
 ```
 

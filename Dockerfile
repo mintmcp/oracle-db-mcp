@@ -1,7 +1,7 @@
 # MintMCP hosted build for Oracle's Database MCP Toolkit.
 #
-# Build context is the upstream monorepo (./upstream); the toolkit lives in
-# src/oracle-db-mcp-java-toolkit. The upstream Dockerfile stays pristine; this
+# Build context is the repo root; the toolkit lives in the upstream submodule at
+# upstream/src/oracle-db-mcp-java-toolkit. The upstream Dockerfile stays pristine; this
 # one differs in two ways only:
 #   1. The runtime stage ships Node.js, because the hosted stdio runtime wrapper
 #      exec's `npx` to bridge stdio<->HTTP (same reason okta-mcp builds on a
@@ -16,7 +16,7 @@
 FROM maven:3.9.12-eclipse-temurin-17 AS builder
 
 WORKDIR /src
-COPY src/oracle-db-mcp-java-toolkit/ .
+COPY upstream/src/oracle-db-mcp-java-toolkit/ .
 RUN mvn -B -q -DskipTests clean package
 
 # ---------- 2) Runtime stage ----------
