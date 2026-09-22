@@ -1,6 +1,6 @@
 # Oracle Database MCP Docker Image
 
-This repository contains the build configuration for the [`keomaplank/oracle-db-mcp`](https://hub.docker.com/r/keomaplank/oracle-db-mcp) image published on Docker Hub. The image vendors Oracle's [Database MCP Toolkit](https://github.com/oracle/mcp/tree/main/src/oracle-db-mcp-java-toolkit) (`src/oracle-db-mcp-java-toolkit` in the [`oracle/mcp`](https://github.com/oracle/mcp) monorepo) as a git submodule and adds what is required to run it inside MintMCP's hosted environment.
+This repository contains the build configuration for the Oracle Database MCP image MintMCP publishes on Docker Hub (`<namespace>/oracle-db-mcp` below). The image vendors Oracle's [Database MCP Toolkit](https://github.com/oracle/mcp/tree/main/src/oracle-db-mcp-java-toolkit) (`src/oracle-db-mcp-java-toolkit` in the [`oracle/mcp`](https://github.com/oracle/mcp) monorepo) as a git submodule and adds what is required to run it inside MintMCP's hosted environment.
 
 ## Motivation
 - The toolkit is configured through JVM system properties. The image adds an entrypoint (`oracle-db-mcp-toolkit`) that maps environment variables to those properties, using the variable names from upstream's `manifest.json`: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `TOOLS`, `CONFIG_FILE`, `OJDBC_EXT_DIR`.
@@ -9,36 +9,42 @@ This repository contains the build configuration for the [`keomaplank/oracle-db-
 
 The toolkit itself is unmodified and runs with its default tool set. See the upstream README for the tools and their configuration.
 
-## Testing the image locally
-```bash
-# Build a local image (matches the build-and-push script)
-docker build \
-  --platform linux/amd64 \
-  -f Dockerfile \
-  -t keomaplank/oracle-db-mcp:local \
-  ./upstream
+## Build and test locally
 
-# Run over stdio against your database
-docker run -i --rm \
+```bash
+git submodule update --init --recursive
+
+docker buildx build --platform linux/amd64 -t <namespace>/oracle-db-mcp:local --load ./upstream
+```
+
+The build context is the `upstream/` submodule; the Dockerfile picks `src/oracle-db-mcp-java-toolkit` out of it. The image runs over stdio, so test it by feeding MCP JSON-RPC on stdin:
+
+```bash
+docker run -i --rm --platform linux/amd64 \
   -e DB_URL=jdbc:oracle:thin:@db.example.com:1521/ORCLPDB1 \
   -e DB_USER=mcp_user \
   -e DB_PASSWORD=... \
-  keomaplank/oracle-db-mcp:local
+  <namespace>/oracle-db-mcp:local
 ```
 
-Then send MCP JSON-RPC (`initialize`, `tools/list`, ...) on stdin.
+Send `initialize`, then `tools/list`; 17 tools come back. Anything the entrypoint or the toolkit logs goes to stderr, stdout carries only JSON-RPC.
 
-## Building and publishing
+## Publishing
+
 ```bash
-git submodule update --init --recursive
-git -C upstream fetch --tags
-
-docker login
-./build-and-push.sh --version <tag> --ref <upstream commit or tag>
+docker buildx build --platform linux/amd64 -t <namespace>/oracle-db-mcp:<tag> --load ./upstream
+docker push <namespace>/oracle-db-mcp:<tag>
 ```
 
-Examples:
-- `./build-and-push.sh --version latest` (builds upstream `main`)
-- `./build-and-push.sh --version 1.0.0 --ref 1f1c05c`
+Tags follow the toolkit version from upstream's `pom.xml` (`1.0.0`), with a `-N` suffix for image-only rebuilds of the same upstream version (`1.0.0-1`). Update `image` in the MintMCP registry entry to the pushed tag.
 
-Image tags follow the toolkit version (`<toolkit version>` from `pom.xml`), with a `-N` suffix for image-only rebuilds of the same upstream version.
+## Bumping the upstream version
+
+```bash
+git -C upstream fetch origin
+git -C upstream checkout <commit or tag>
+git add upstream
+git commit -m "Bump upstream to <commit or tag>"
+```
+
+Then build and publish with a new tag. Deploying a stdio connector works through the MintMCP panel or the registry entry; `hosted-cli build-and-push --transport stdio` did not provision the platform's stdio adapter when the Grafana image was tried (hosted-cli 0.0.20).
