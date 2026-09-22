@@ -1,6 +1,6 @@
 # Oracle Database MCP Docker Image
 
-This repository contains the build configuration for the [`mintmcp/oracle-db-mcp`](https://hub.docker.com/r/mintmcp/oracle-db-mcp) image published on Docker Hub. The image vendors Oracle's [Database MCP Toolkit](https://github.com/oracle/mcp/tree/main/src/oracle-db-mcp-java-toolkit) (`src/oracle-db-mcp-java-toolkit` in the [`oracle/mcp`](https://github.com/oracle/mcp) monorepo) as a git submodule and adds what is required to run it inside MintMCP's hosted environment.
+This repository contains the build configuration for the [`keomaplank/oracle-db-mcp`](https://hub.docker.com/r/keomaplank/oracle-db-mcp) image published on Docker Hub. The image vendors Oracle's [Database MCP Toolkit](https://github.com/oracle/mcp/tree/main/src/oracle-db-mcp-java-toolkit) (`src/oracle-db-mcp-java-toolkit` in the [`oracle/mcp`](https://github.com/oracle/mcp) monorepo) as a git submodule and adds what is required to run it inside MintMCP's hosted environment.
 
 ## Motivation
 - The toolkit is configured through JVM system properties. The image adds an entrypoint (`oracle-db-mcp-toolkit`) that maps environment variables to those properties, using the variable names from upstream's `manifest.json`: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `TOOLS`, `CONFIG_FILE`, `OJDBC_EXT_DIR`.
@@ -15,7 +15,7 @@ The toolkit itself is unmodified and runs with its default tool set. See the ups
 docker build \
   --platform linux/amd64 \
   -f Dockerfile \
-  -t mintmcp/oracle-db-mcp:local \
+  -t keomaplank/oracle-db-mcp:local \
   ./upstream
 
 # Run over stdio against your database
@@ -23,7 +23,7 @@ docker run -i --rm \
   -e DB_URL=jdbc:oracle:thin:@db.example.com:1521/ORCLPDB1 \
   -e DB_USER=mcp_user \
   -e DB_PASSWORD=... \
-  mintmcp/oracle-db-mcp:local
+  keomaplank/oracle-db-mcp:local
 ```
 
 Then send MCP JSON-RPC (`initialize`, `tools/list`, ...) on stdin.

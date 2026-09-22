@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UPSTREAM_DIR="${SCRIPT_DIR}/upstream"
 
-DOCKER_USER="mintmcp"
+DOCKER_USER="keomaplank"
 DOCKER_REPO="oracle-db-mcp"
 VERSION="latest"
 UPSTREAM_REF=""
@@ -17,7 +17,7 @@ Options:
   --version, -v <value>   Image tag to build (defaults to latest)
   --ref <value>           Upstream oracle/mcp ref to build from (defaults to main for
                           latest, otherwise the same value as --version)
-  --user, -u <value>      Docker Hub username/namespace (defaults to mintmcp)
+  --user, -u <value>      Docker Hub username/namespace (defaults to keomaplank)
   --repo, -r <value>      Docker Hub repository name (defaults to oracle-db-mcp)
   --help, -h              Show this message
 
