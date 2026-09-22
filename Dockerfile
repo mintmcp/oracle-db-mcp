@@ -26,7 +26,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends openjdk-17-jre-headless curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -r -u 10001 appuser \
+# The hosted stdio wrapper runs `npx @mintmcp/stdio-to-server` as this user, and
+# npm needs a writable home for its cache and logs, so create one (-m).
+RUN useradd -r -u 10001 -m appuser \
     && mkdir -p /app /ext && chown -R appuser:appuser /app /ext
 
 WORKDIR /app
