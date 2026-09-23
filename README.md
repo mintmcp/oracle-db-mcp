@@ -29,6 +29,27 @@ docker run -i --rm --platform linux/amd64 \
 
 Send `initialize`, then `tools/list`; 17 tools come back. Anything the entrypoint or the toolkit logs goes to stderr, stdout carries only JSON-RPC.
 
+## Private Network routes
+
+To reach a database that is only reachable inside a customer network, create the connector in a MintMCP [Private Network](https://www.mintmcp.com/docs/private-networks) that has a route to the database listener with **Hosted connectors** enabled. MintMCP then injects `MINTMCP_PRIVATE_NETWORK_ROUTES_JSON` into the container, listing each route's `id`, `name`, and the private `host` and `port` that carry raw TCP to the listener.
+
+Set `DB_PRIVATE_NETWORK_ROUTE_ID` to the route's ID (`pnrte_...`) and keep `DB_URL` pointing at the database's real internal address:
+
+```text
+DB_URL=jdbc:oracle:thin:@db.internal.example:1521/EBSPROD
+DB_PRIVATE_NETWORK_ROUTE_ID=pnrte_...
+```
+
+At startup the entrypoint runs `resolve-private-network-route.js`, which replaces the host and port in `DB_URL` with the route's and keeps the service name or SID. The connector refuses to start, with the reason on stderr, if the route is not in the injected list, if the list is missing, or if `DB_URL` is not in EZConnect form (`@host:port/service`, `@//host:port/service`, `@host:port:SID`). Without `DB_PRIVATE_NETWORK_ROUTE_ID`, `DB_URL` is used as is.
+
+Routes carry plain TCP, so this covers listeners on TCP. A RAC SCAN listener redirects clients to node addresses a single route cannot follow; point the route at a node listener instead.
+
+The resolver's tests run during the image build (`node --test`); run them locally with:
+
+```bash
+docker run --rm -v "$PWD":/w -w /w node:22-bookworm-slim node --test resolve-private-network-route.test.js
+```
+
 ## Publishing
 
 ```bash

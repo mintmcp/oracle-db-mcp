@@ -1,5 +1,7 @@
 # Send only the toolkit sources to the build.
 *
 !upstream/src/oracle-db-mcp-java-toolkit/
+!resolve-private-network-route.js
+!resolve-private-network-route.test.js
 upstream/src/oracle-db-mcp-java-toolkit/target/
 **/.git
