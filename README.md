@@ -51,7 +51,7 @@ The connector refuses to start, with the reason on stderr, if a route is missing
 
 Limits:
 
-- With a hosts file set, the JVM resolves only the mapped hostnames. Database traffic is unaffected, but toolkit features that call other hosts by name (OCI Object Storage for the RAG tools) can't resolve them in this mode.
+- With a hosts file set, the JVM resolves only the mapped hostnames. Database traffic is unaffected, and in this stdio deployment nothing else in the JVM looks up names: the Object Storage and RAG tools run inside the database (`DBMS_CLOUD`), and the JVM's only outbound HTTP (OAuth2 token validation, DeepSec) is unused. It would matter if a future toolkit feature called out from the JVM.
 - Database ports must be 1024 or higher (the container runs as a non-root user).
 - TNS aliases need a `tnsnames.ora`, which the image doesn't ship.
 - For RAC, map the SCAN address and every node VIP the listeners redirect to, each to a route that reaches it. Listeners that register node addresses as IP literals can't be redirected.

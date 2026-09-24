@@ -23,8 +23,8 @@
 //                                              or RAC SCAN and node VIP listeners
 //
 // Trade-off: with a hosts file set, the JVM resolves only the mapped hostnames. Database traffic
-// is unaffected; toolkit features that call other hosts by name (OCI Object Storage for the RAG
-// tools) cannot resolve them in this mode.
+// is unaffected, and in this stdio deployment nothing else in the JVM resolves names (Object
+// Storage and RAG tools run in the database; OAuth2/DeepSec HTTP calls are unused).
 //
 // Usage (from the entrypoint): node private-network.js /usr/bin/java [-D...] -jar /app/oracle-db-mcp-toolkit.jar
 
