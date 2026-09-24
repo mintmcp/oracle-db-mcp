@@ -31,23 +31,35 @@ Send `initialize`, then `tools/list`; 17 tools come back. Anything the entrypoin
 
 ## Private Network routes
 
-To reach a database that is only reachable inside a customer network, create the connector in a MintMCP [Private Network](https://www.mintmcp.com/docs/private-networks) that has a route to the database listener with **Hosted connectors** enabled. MintMCP then injects `MINTMCP_PRIVATE_NETWORK_ROUTES_JSON` into the container, listing each route's `id`, `name`, and the private `host` and `port` that carry raw TCP to the listener.
+To reach a database that is only reachable inside a customer network, move the connector into a MintMCP [Private Network](https://www.mintmcp.com/docs/private-networks) that has a route to the database listener with **Hosted connectors** enabled. MintMCP then injects `MINTMCP_PRIVATE_NETWORK_ROUTES_JSON` into the container, listing each route's `id`, `name`, and the private `host` and `port` that carry raw TCP to the listener.
 
-Set `DB_PRIVATE_NETWORK_ROUTE_ID` to the route's ID (`pnrte_...`) and keep `DB_URL` pointing at the database's real internal address:
+Keep `DB_URL` pointing at the database's real address and tell the connector which route serves it, with one of:
 
-```text
-DB_URL=jdbc:oracle:thin:@db.internal.example:1521/EBSPROD
-DB_PRIVATE_NETWORK_ROUTE_ID=pnrte_...
-```
+| Variable | Use it when | Example |
+| --- | --- | --- |
+| `DB_PRIVATE_NETWORK_ROUTE_ID` | `DB_URL` names a single address (EZConnect, or a descriptor with one `ADDRESS`) | `pnrte_...` |
+| `DB_PRIVATE_NETWORK_ROUTES` | Several addresses: a failover descriptor, RAC SCAN and node listeners, datasources in `CONFIG_FILE` | `scan.internal:1521=pnrte_a,node1-vip.internal:1521=pnrte_b` |
 
-At startup the entrypoint runs `resolve-private-network-route.js`, which replaces the host and port in `DB_URL` with the route's and keeps the service name or SID. The connector refuses to start, with the reason on stderr, if the route is not in the injected list, if the list is missing, or if `DB_URL` is not in EZConnect form (`@host:port/service`, `@//host:port/service`, `@host:port:SID`). Without `DB_PRIVATE_NETWORK_ROUTE_ID`, `DB_URL` is used as is.
+With either variable set, the entrypoint runs the JVM under `private-network.js`:
 
-Routes carry plain TCP, so this covers listeners on TCP. A RAC SCAN listener redirects clients to node addresses a single route cannot follow; point the route at a node listener instead.
+- Each mapped host gets its own loopback address (`127.0.10.N`), where a forwarder listens on the database port and pipes every connection to the host's route.
+- The JVM resolves mapped hostnames to those addresses through a hosts file (`-Djdk.net.hosts.file`), so `DB_URL` is passed unchanged and the driver still sees the real hostname, including for TLS server name checks. Any URL form works, and redirects to a mapped host (a RAC SCAN listener sending the client to a node VIP) land on the forwarder too.
+- Hosts written as IP literals can't be redirected by name, so their occurrences in `DB_URL` are replaced with the loopback address.
+- The wrapper never writes to stdout, forwards signals to the JVM, and exits with its status.
 
-The resolver's tests run during the image build (`node --test`); run them locally with:
+The connector refuses to start, with the reason on stderr, if a route is missing from the injected list, the list is missing, `DB_PRIVATE_NETWORK_ROUTE_ID` meets a URL with several addresses or none, or both variables are set. Without either variable, the JVM starts directly as before.
+
+Limits:
+
+- With a hosts file set, the JVM resolves only the mapped hostnames. Database traffic is unaffected, but toolkit features that call other hosts by name (OCI Object Storage for the RAG tools) can't resolve them in this mode.
+- Database ports must be 1024 or higher (the container runs as a non-root user).
+- TNS aliases need a `tnsnames.ora`, which the image doesn't ship.
+- For RAC, map the SCAN address and every node VIP the listeners redirect to, each to a route that reaches it. Listeners that register node addresses as IP literals can't be redirected.
+
+The wrapper's tests run during the image build (`node --test`); run them locally with:
 
 ```bash
-docker run --rm -v "$PWD":/w -w /w node:22-bookworm-slim node --test resolve-private-network-route.test.js
+docker run --rm -v "$PWD":/w -w /w node:22-bookworm-slim node --test private-network.test.js
 ```
 
 ## Publishing
