@@ -31,23 +31,31 @@ Send `initialize`, then `tools/list`; 17 tools come back. Anything the entrypoin
 
 ## Private Network routes
 
-To reach a database that is only reachable inside a customer network, create the connector in a MintMCP [Private Network](https://www.mintmcp.com/docs/private-networks) that has a route to the database listener with **Hosted connectors** enabled. MintMCP then injects `MINTMCP_PRIVATE_NETWORK_ROUTES_JSON` into the container, listing each route's `id`, `name`, and the private `host` and `port` that carry raw TCP to the listener.
+To reach a database that is only reachable inside a customer network, move the connector into a MintMCP [Private Network](https://www.mintmcp.com/docs/private-networks) that has a route to the database listener with **Hosted connectors** enabled. MintMCP then injects `MINTMCP_PRIVATE_NETWORK_ROUTES_JSON` into the container, listing each route's `id`, `name`, and the private `host` and `port` that carry raw TCP to the listener.
 
-Set `DB_PRIVATE_NETWORK_ROUTE_ID` to the route's ID (`pnrte_...`) and keep `DB_URL` pointing at the database's real internal address:
+Keep `DB_URL` pointing at the database's real address and tell the connector which route serves it, with one of:
 
-```text
-DB_URL=jdbc:oracle:thin:@db.internal.example:1521/EBSPROD
-DB_PRIVATE_NETWORK_ROUTE_ID=pnrte_...
-```
+| Variable | Use it when | Example |
+| --- | --- | --- |
+| `DB_PRIVATE_NETWORK_ROUTE_ID` | `DB_URL` names a single address (EZConnect, or a descriptor with one `ADDRESS`) | `pnrte_...` |
+| `DB_PRIVATE_NETWORK_ROUTES` | Several addresses: a failover descriptor, RAC SCAN and node listeners, datasources in `CONFIG_FILE` | `scan.internal:1521=pnrte_a,node1-vip.internal:1521=pnrte_b` |
 
-At startup the entrypoint runs `resolve-private-network-route.js`, which replaces the host and port in `DB_URL` with the route's and keeps the service name or SID. The connector refuses to start, with the reason on stderr, if the route is not in the injected list, if the list is missing, or if `DB_URL` is not in EZConnect form (`@host:port/service`, `@//host:port/service`, `@host:port:SID`). Without `DB_PRIVATE_NETWORK_ROUTE_ID`, `DB_URL` is used as is.
+With either variable set, the entrypoint runs the JVM under `private-network.js`, which uses the JDBC driver's own SOCKS5 support:
 
-Routes carry plain TCP, so this covers listeners on TCP. A RAC SCAN listener redirects clients to node addresses a single route cannot follow; point the route at a node listener instead.
+- The wrapper starts a SOCKS5 server on loopback that accepts only the mapped host:port pairs and pipes each connection to its route. Anything else is refused and logged (`no Private Network route for host:port`).
+- The JVM starts with `oracle.net.socksProxyHost`, `oracle.net.socksProxyPort` and `oracle.net.socksRemoteDNS=true`, so every connection the driver opens goes through that proxy with the target hostname unresolved. `DB_URL` is passed unchanged, any URL form works, and the driver keeps the real hostname for TLS checks.
+- Connections the driver opens on its own go through the proxy too: a RAC SCAN listener redirecting the client to a node VIP reaches that node through its route, as long as the node address is mapped.
+- Only the driver's connections use the proxy; other JVM traffic and name resolution are untouched.
+- The wrapper never writes to stdout, forwards signals to the JVM, and exits with its status.
 
-The resolver's tests run during the image build (`node --test`); run them locally with:
+The connector refuses to start, with the reason on stderr, if a route is missing from the injected list, the list is missing, `DB_PRIVATE_NETWORK_ROUTE_ID` meets a URL with several addresses or none, or both variables are set. Without either variable, the JVM starts directly as before.
+
+Limits: TNS aliases need a `tnsnames.ora`, which the image doesn't ship. The SOCKS properties are an Oracle JDBC feature; re-check them when bumping the driver version with upstream.
+
+The wrapper's tests run during the image build (`node --test`); run them locally with:
 
 ```bash
-docker run --rm -v "$PWD":/w -w /w node:22-bookworm-slim node --test resolve-private-network-route.test.js
+docker run --rm -v "$PWD":/w -w /w node:22-bookworm-slim node --test private-network.test.js
 ```
 
 ## Publishing
