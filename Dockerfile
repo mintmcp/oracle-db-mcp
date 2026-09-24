@@ -8,8 +8,9 @@
 #      python-nodejs base).
 #   2. An entrypoint script turns env vars into the -D system properties the
 #      toolkit reads, using the same variable names as upstream's manifest.json.
-#   3. Optional MintMCP Private Network support: with DB_PRIVATE_NETWORK_ROUTE_ID
-#      set, the entrypoint points DB_URL at that route (resolve-private-network-route.js).
+#   3. Optional MintMCP Private Network support: with DB_PRIVATE_NETWORK_ROUTE_ID or
+#      DB_PRIVATE_NETWORK_ROUTES set, the JVM runs under private-network.js, a small SOCKS5
+#      proxy the JDBC driver sends its connections through, one route per database address.
 #
 # The toolkit is served over stdio: its HTTP mode is HTTPS-only and requires
 # bearer/OAuth2 auth, neither of which the hosted runtime provides.
@@ -37,11 +38,11 @@ WORKDIR /app
 
 COPY --from=builder /src/target/oracle-db-mcp-toolkit-*.jar /app/oracle-db-mcp-toolkit.jar
 
-# Private Network route resolver. Its tests run here so a broken resolver fails
-# the build; the test file is not kept in the image.
-COPY resolve-private-network-route.js resolve-private-network-route.test.js /app/
-RUN node --test /app/resolve-private-network-route.test.js \
-    && rm /app/resolve-private-network-route.test.js
+# Private Network wrapper. Its tests run here so a broken wrapper fails the
+# build; the test file is not kept in the image.
+COPY private-network.js private-network.test.js /app/
+RUN node --test /app/private-network.test.js \
+    && rm /app/private-network.test.js
 
 # The hosted stdio wrapper spawns the startup command with a minimal env, so the
 # entrypoint lives on the default PATH and uses absolute paths internally.
@@ -49,9 +50,6 @@ COPY --chmod=0755 <<'EOF' /usr/local/bin/oracle-db-mcp-toolkit
 #!/bin/sh
 # Map env vars to the -D system properties the toolkit reads. Names follow
 # upstream's manifest.json; unset variables are simply not passed.
-if [ -n "${DB_PRIVATE_NETWORK_ROUTE_ID:-}" ]; then
-  DB_URL="$(/usr/local/bin/node /app/resolve-private-network-route.js)" || exit 1
-fi
 set -- /usr/bin/java
 [ -n "${CONFIG_FILE:-}" ]        && set -- "$@" "-DconfigFile=${CONFIG_FILE}"
 [ -n "${DB_URL:-}" ]             && set -- "$@" "-Ddb.url=${DB_URL}"
@@ -60,7 +58,12 @@ set -- /usr/bin/java
 [ -n "${TOOLS:-}" ]              && set -- "$@" "-Dtools=${TOOLS}"
 [ -n "${OJDBC_EXT_DIR:-}" ]      && set -- "$@" "-Dojdbc.ext.dir=${OJDBC_EXT_DIR}"
 [ -n "${JAVA_OPTS:-}" ]          && set -- "$@" ${JAVA_OPTS}
-exec "$@" -jar /app/oracle-db-mcp-toolkit.jar
+set -- "$@" -jar /app/oracle-db-mcp-toolkit.jar
+# In a MintMCP Private Network, run the JVM under the SOCKS proxy for its routes.
+if [ -n "${DB_PRIVATE_NETWORK_ROUTE_ID:-}${DB_PRIVATE_NETWORK_ROUTES:-}" ]; then
+  exec /usr/local/bin/node /app/private-network.js "$@"
+fi
+exec "$@"
 EOF
 
 USER appuser
